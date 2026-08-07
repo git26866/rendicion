@@ -1,3 +1,12 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Rendición">
+<meta name="theme-color" content="#0B6B5B">
 <title>Rendición de Gastos</title>
 <style>
   :root{
@@ -192,6 +201,8 @@
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
 </style>
+</head>
+<body>
 
 <div id="app">
   <header class="topbar">
@@ -638,7 +649,14 @@
   }
   function amountsIn(str){
     var out=[],re=/\$?\s?(\d{1,3}(?:[.\s]\d{3})+|\d{3,7})(?!\d)/g,m;
-    while((m=re.exec(str))){ var n=parseInt(m[1].replace(/[.\s]/g,''),10); if(n>=100&&n<=99999999) out.push(n); }
+    while((m=re.exec(str))){ var n=parseInt(m[1].replace(/[.\s]/g,''),10); if(n>=100&&n<=20000000) out.push(n); }
+    return out;
+  }
+  // Solo montos "con formato de dinero": con $ delante o con puntos de miles.
+  // Evita confundir IDs/números largos de la boleta con el monto.
+  function moneyMarkedIn(str){
+    var out=[],re=/(?:\$\s?(\d{1,3}(?:[.\s]\d{3})+|\d{2,7})|(\d{1,3}(?:\.\d{3})+))/g,m;
+    while((m=re.exec(str))){ var g=m[1]||m[2]; if(!g) continue; var n=parseInt(g.replace(/[.\s]/g,''),10); if(n>=100&&n<=20000000) out.push(n); }
     return out;
   }
   function titleCase(s){ s=String(s).toLowerCase().replace(/\s+/g,' ').trim();
@@ -652,9 +670,9 @@
     // Monto: preferir líneas con TOTAL (no SUBTOTAL); si no, el mayor del ticket
     var tot=[];
     lines.forEach(function(l){ var U=l.toUpperCase();
-      if(/TOTAL/.test(U)&&!/SUB\s*-?\s*TOTAL/.test(U)) amountsIn(l).forEach(function(n){tot.push(n);}); });
+      if(/(TOTAL|A\s*PAGAR|\bPAGAR\b|MONTO)/.test(U)&&!/SUB\s*-?\s*TOTAL/.test(U)) amountsIn(l).forEach(function(n){tot.push(n);}); });
     if(tot.length) out.amount=Math.max.apply(null,tot);
-    else { var all=amountsIn(raw); if(all.length) out.amount=Math.max.apply(null,all); }
+    else { var mk=moneyMarkedIn(raw); if(mk.length) out.amount=Math.max.apply(null,mk); }
     // Fecha DD/MM/AAAA
     var dm=raw.match(/([0-3]?\d)\s*[\/\-.]\s*([01]?\d)\s*[\/\-.]\s*(20\d{2}|\d{2})/);
     if(dm){ var d=+dm[1],mo=+dm[2],y=dm[3]; if(y.length===2)y='20'+y;
@@ -910,3 +928,6 @@
   try{ loadTesseract(); }catch(e){}
 })();
 </script>
+
+</body>
+</html>
