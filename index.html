@@ -247,7 +247,7 @@
   </button>
 </nav>
 
-<input id="fileInput" type="file" accept="image/*" capture="environment" hidden>
+<input id="fileInput" type="file" accept="image/*" hidden>
 
 <!-- Scrim -->
 <div id="scrim" class="scrim"></div>
@@ -449,7 +449,7 @@
 
     var list=$('#list');
     if(!receipts.length){
-      list.innerHTML='<div class="empty"><div class="em-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>Aún no hay boletas</h3><p>Toca <b>Agregar boleta</b>, sácale una foto a tu boleta y anota el monto. Cuando termines, genera la rendición.</p></div>';
+      list.innerHTML='<div class="empty"><div class="em-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>Aún no hay boletas</h3><p>Toca <b>Agregar boleta</b>, saca una foto o elige una de tu galería, y anota el monto. Cuando termines, genera la rendición.</p></div>';
       $('#secClear').textContent='';
       return;
     }
