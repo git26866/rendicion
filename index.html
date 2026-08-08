@@ -47,6 +47,7 @@
   }
 
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  [hidden]{display:none!important;}
   html,body{margin:0;padding:0;}
   body{
     background:var(--paper); color:var(--ink);
@@ -1151,13 +1152,31 @@
     },60);
   }
 
+  function pendingIdsOfLast(){
+    if(!lastPdf||!lastPdf.ids) return [];
+    return lastPdf.ids.filter(function(id){ var r=receipts.find(function(x){return x.id===id;}); return r && !r.rendido; });
+  }
+  function doArchive(ids){
+    var arr=receipts.filter(function(r){ return ids.indexOf(r.id)>=0 && !r.rendido; });
+    if(!arr.length){ closeSheet(); return; }
+    var when=todayISO();
+    arr.forEach(function(r){ r.rendido=true; r.rendidoAt=when; });
+    Promise.all(arr.map(function(r){return persist(r);})).then(loadReceipts).then(function(){
+      render(); closeSheet(); toast(arr.length+' marcada(s) como rendidas');
+    }).catch(function(){ toast('No pude archivar'); });
+  }
+  function promptArchive(){
+    var ids=pendingIdsOfLast();
+    if(!ids.length) return;
+    if(confirm('¿Marcar como rendidas las '+ids.length+' de '+(lastPdf.empName||'esta empresa')+'? Saldrán de Pendientes y quedarán en Rendidas.')) doArchive(ids);
+  }
   $('#optShare').addEventListener('click',function(){
     if(!lastPdf) return;
     var file=new File([lastPdf.blob],lastPdf.filename,{type:'application/pdf'});
     var data={files:[file],title:lastPdf.subject,text:lastPdf.body};
     if(navigator.canShare && navigator.canShare(data)){
-      navigator.share(data).then(function(){ closeSheet(); }).catch(function(err){ if(err&&err.name!=='AbortError') fallbackDownload(); });
-    } else { fallbackDownload(); toast('Compartir no disponible aquí; PDF descargado'); }
+      navigator.share(data).then(function(){ setTimeout(promptArchive,400); }).catch(function(err){ if(err&&err.name!=='AbortError') fallbackDownload(); });
+    } else { fallbackDownload(); toast('Compartir no disponible aquí; PDF descargado'); setTimeout(promptArchive,400); }
   });
   $('#optMail').addEventListener('click',function(){
     if(!lastPdf) return;
@@ -1169,17 +1188,14 @@
     fallbackDownload(true);
     toast('PDF descargado · abriendo correo…');
     setTimeout(function(){ window.location.href=url; },500);
+    setTimeout(promptArchive,1600);
   });
-  $('#optDownload').addEventListener('click',function(){ fallbackDownload(); toast('PDF descargado'); });
+  $('#optDownload').addEventListener('click',function(){ fallbackDownload(); toast('PDF descargado'); setTimeout(promptArchive,400); });
   $('#optArchive').addEventListener('click',function(){
-    if(!lastPdf||!lastPdf.ids||!lastPdf.ids.length){ toast('Nada que archivar'); return; }
-    if(!confirm('¿Marcar como rendidas las '+lastPdf.ids.length+' de '+(lastPdf.empName||'esta empresa')+'? Se moverán a “Rendidas” y saldrán de pendientes.')) return;
-    var when=todayISO();
-    var toArch=receipts.filter(function(r){ return lastPdf.ids.indexOf(r.id)>=0; });
-    toArch.forEach(function(r){ r.rendido=true; r.rendidoAt=when; });
-    Promise.all(toArch.map(function(r){return persist(r);})).then(loadReceipts).then(function(){
-      render(); closeSheet(); toast(toArch.length+' marcada(s) como rendidas');
-    }).catch(function(){ toast('No pude archivar'); });
+    var ids=pendingIdsOfLast();
+    if(!ids.length){ toast('Nada que archivar'); return; }
+    if(!confirm('¿Marcar como rendidas las '+ids.length+' de '+(lastPdf.empName||'esta empresa')+'? Se moverán a “Rendidas” y saldrán de pendientes.')) return;
+    doArchive(ids);
   });
 
   function fallbackDownload(silent){
