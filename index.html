@@ -210,6 +210,19 @@
   .gh-gen svg{width:14px;height:14px;}
   .r-type{font-size:10.5px;font-weight:600;color:var(--muted);border:1px solid var(--line);border-radius:20px;padding:1px 6px;text-transform:uppercase;letter-spacing:.03em;}
 
+  /* Segmented Pendientes/Rendidas */
+  .segmented{display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--line);border-radius:12px;padding:4px;margin:2px 0 14px;}
+  .seg{flex:1;border:none;background:transparent;color:var(--muted);font-size:14px;font-weight:600;padding:9px;border-radius:9px;display:flex;align-items:center;justify-content:center;gap:7px;transition:background .12s,color .12s;}
+  .seg b{font-weight:700;font-size:11.5px;background:var(--line);color:var(--ink);border-radius:20px;padding:1px 7px;min-width:20px;line-height:1.5;}
+  .seg.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow);}
+  .seg.on b{background:var(--accent);color:#fff;}
+  .receipt.done{opacity:.7;}
+  .r-done{font-size:11px;color:var(--accent);background:var(--accent-soft);border-radius:20px;padding:1px 7px;font-weight:600;}
+  .opt.opt-accent{background:var(--accent);border-color:var(--accent);}
+  .opt.opt-accent .opt-ic{background:rgba(255,255,255,.22);color:#fff;}
+  .opt.opt-accent .opt-tx b{color:#fff;}
+  .opt.opt-accent .opt-tx span{color:rgba(255,255,255,.85);}
+
   /* Toast */
   .toast{position:fixed;left:50%;bottom:calc(96px + var(--safe-b));translate:-50% 0;transform:translateY(16px);
     background:var(--ink);color:var(--paper);padding:11px 18px;border-radius:30px;font-size:14px;font-weight:600;
@@ -240,16 +253,21 @@
   </header>
 
   <section class="summary">
-    <span class="label">Total acumulado</span>
+    <span class="label" id="sumLabel">Total por rendir</span>
     <span class="amount tnum" id="sumTotal">$0</span>
     <div class="summary-meta">
-      <span><b id="sumCount">0</b> boletas</span>
+      <span><b id="sumCount">0</b> docs</span>
       <span id="sumPeriod"></span>
       <span id="sumWho" class="chip-accent"></span>
     </div>
   </section>
 
-  <div class="sec-label"><span>Boletas del período</span><span id="secClear"></span></div>
+  <div class="segmented" role="tablist">
+    <button type="button" class="seg on" id="segPend" role="tab">Pendientes <b id="cntPend">0</b></button>
+    <button type="button" class="seg" id="segRend" role="tab">Rendidas <b id="cntRend">0</b></button>
+  </div>
+
+  <div class="sec-label"><span id="secTitle">Por empresa</span><span id="secClear"></span></div>
   <section id="list" class="list" aria-live="polite"></section>
 </div>
 
@@ -328,6 +346,7 @@
       </div>
     </div>
     <div class="form-actions">
+      <button type="button" id="btnUnarchive" class="btn btn-ghost btn-block" hidden>↩︎ Devolver a pendientes</button>
       <button id="btnDeleteReceipt" class="btn btn-danger btn-block" hidden>Eliminar documento</button>
     </div>
   </div>
@@ -425,6 +444,10 @@
       <span class="opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/></svg></span>
       <span class="opt-tx"><b>Solo descargar el PDF</b><span>Se guarda en Archivos del iPhone</span></span>
     </button>
+    <button class="opt opt-accent" id="optArchive" style="margin-top:4px;">
+      <span class="opt-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M9 12l2 2 4-4"/></svg></span>
+      <span class="opt-tx"><b>Marcar como rendidas y archivar</b><span>Se mueven a “Rendidas” y salen de pendientes</span></span>
+    </button>
     <div class="hint" id="resHint" style="margin-top:6px;"></div>
   </div>
 </div>
@@ -475,7 +498,8 @@
   var settings={name:'',email:'',empresas:[],lastEmpresaId:''};
   var editingId=null, pendingPhoto=null; // {dataUrl,w,h}
   var editingEmpId=null;
-  var lastPdf=null; // {blob,filename,subject,body,to,cc}
+  var lastPdf=null; // {blob,filename,subject,body,to,cc,ids}
+  var viewMode='pend'; // 'pend' | 'rend'
 
   function uid(){ return 'r'+Math.round(performance.now()*1000).toString(36)+Math.round(performance.timeOrigin).toString(36); }
   function eid(){ return 'e'+Math.round(performance.now()*1000).toString(36)+Math.floor((performance.timeOrigin%1e6)).toString(36); }
@@ -508,31 +532,46 @@
 
   /* ---------- Rendering ---------- */
   function render(){
-    var total=receipts.reduce(function(s,r){return s+(r.amount||0);},0);
+    var pend=receipts.filter(function(r){return !r.rendido;});
+    var rend=receipts.filter(function(r){return r.rendido;});
+    $('#cntPend').textContent=pend.length; $('#cntRend').textContent=rend.length;
+    $('#segPend').classList.toggle('on',viewMode==='pend');
+    $('#segRend').classList.toggle('on',viewMode==='rend');
+    var active = viewMode==='rend'? rend : pend;
+    var total=active.reduce(function(s,r){return s+(r.amount||0);},0);
     $('#sumTotal').textContent=money(total);
-    $('#sumCount').textContent=receipts.length;
-    $('#btnGenerate').disabled=receipts.length===0;
-    // period
-    if(receipts.length){
-      var ds=receipts.map(function(r){return r.date;}).filter(Boolean).sort();
+    $('#sumCount').textContent=active.length;
+    $('#sumLabel').textContent = viewMode==='rend'? 'Total rendido' : 'Total por rendir';
+    $('#secTitle').textContent = viewMode==='rend'? 'Rendidas · por empresa' : 'Por empresa';
+    $('#btnGenerate').disabled = pend.length===0;
+    if(active.length){
+      var ds=active.map(function(r){return r.date;}).filter(Boolean).sort();
       $('#sumPeriod').textContent = ds.length? fmtShort(ds[0])+(ds[ds.length-1]!==ds[0]?' – '+fmtShort(ds[ds.length-1]):'') : '';
     } else $('#sumPeriod').textContent='';
     var ne=(settings.empresas||[]).length;
     $('#sumWho').textContent = ne? ('· '+ne+' empresa'+(ne!==1?'s':'')) : (settings.name?('· '+settings.name):'');
 
     var list=$('#list');
-    if(!receipts.length){
-      list.innerHTML='<div class="empty"><div class="em-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>Aún no hay boletas</h3><p>Toca <b>Agregar boleta</b>, saca una foto o elige una de tu galería, anota el monto y asígnala a una empresa. Al final generas un informe por empresa.</p></div>';
+    if(!active.length){
+      var emptyMsg;
+      if(viewMode==='rend'){
+        emptyMsg='<div class="empty"><div class="em-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg></div><h3>Aún no hay rendidas</h3><p>Cuando generes el informe de una empresa, toca <b>“Marcar como rendidas”</b> y esos documentos se archivan aquí.</p></div>';
+      } else if(receipts.length){
+        emptyMsg='<div class="empty"><div class="em-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg></div><h3>¡Todo al día!</h3><p>No tienes documentos pendientes. Los ya rendidos están en la pestaña <b>Rendidas</b>.</p></div>';
+      } else {
+        emptyMsg='<div class="empty"><div class="em-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div><h3>Aún no hay boletas</h3><p>Toca <b>Agregar boleta</b>, saca una foto o elige una de tu galería, anota el monto y asígnala a una empresa. Al final generas un informe por empresa.</p></div>';
+      }
+      list.innerHTML=emptyMsg;
       $('#secClear').textContent='';
       return;
     }
-    $('#secClear').textContent=receipts.length+' ítem'+(receipts.length>1?'s':'');
+    $('#secClear').textContent=active.length+' ítem'+(active.length>1?'s':'');
     list.innerHTML='';
     var chevron='<span class="r-chevron"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg></span>';
     var genIco='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>';
     var groups=[];
-    (settings.empresas||[]).forEach(function(e){ groups.push({emp:e,items:receiptsByEmpresa(e.id)}); });
-    var unassigned=receipts.filter(function(r){ return !r.empresaId||!empresaById(r.empresaId); });
+    (settings.empresas||[]).forEach(function(e){ groups.push({emp:e,items:active.filter(function(r){return r.empresaId===e.id;})}); });
+    var unassigned=active.filter(function(r){ return !r.empresaId||!empresaById(r.empresaId); });
     if(unassigned.length) groups.push({emp:null,items:unassigned});
     groups.forEach(function(g){
       if(!g.items.length) return;
@@ -540,21 +579,24 @@
       var head=document.createElement('div'); head.className='group-head';
       head.innerHTML='<div class="gh-l"><div class="gh-name">'+esc(g.emp?g.emp.nombre:'Sin asignar')+'</div>'+
         '<div class="gh-sub">'+g.items.length+' doc'+(g.items.length!==1?'s':'')+'  ·  '+money(sub)+'</div></div>'+
-        (g.emp?'<button type="button" class="gh-gen">'+genIco+'Generar</button>':'');
+        ((g.emp&&viewMode==='pend')?'<button type="button" class="gh-gen">'+genIco+'Generar</button>':'');
       list.appendChild(head);
-      if(g.emp){ head.querySelector('.gh-gen').addEventListener('click',function(ev){ ev.stopPropagation(); generateFor(g.emp.id); }); }
+      if(g.emp&&viewMode==='pend'){ head.querySelector('.gh-gen').addEventListener('click',function(ev){ ev.stopPropagation(); generateFor(g.emp.id); }); }
       g.items.forEach(function(r){
-        var el=document.createElement('div'); el.className='receipt';
+        var el=document.createElement('div'); el.className='receipt'+(r.rendido?' done':'');
+        var badge = r.rendido? '<span class="r-done">Rendida'+(r.rendidoAt?' '+fmtShort(r.rendidoAt):'')+'</span>' : '<span class="r-type">'+esc(r.tipo||'Boleta')+'</span>';
         el.innerHTML=
           '<img class="thumb" src="'+(r.thumb||'')+'" alt="">'+
           '<div class="r-main"><div class="r-desc">'+esc(r.desc||'Sin descripción')+'</div>'+
-          '<div class="r-sub"><span class="r-type">'+esc(r.tipo||'Boleta')+'</span><span class="r-cat">'+esc(r.cat||'General')+'</span><span>'+fmtShort(r.date)+'</span></div></div>'+
+          '<div class="r-sub">'+badge+'<span class="r-cat">'+esc(r.cat||'General')+'</span><span>'+fmtShort(r.date)+'</span></div></div>'+
           '<div class="r-amt tnum">'+money(r.amount)+'</div>'+chevron;
         el.addEventListener('click',function(){ openEditor(r.id); });
         list.appendChild(el);
       });
     });
   }
+  $('#segPend').addEventListener('click',function(){ viewMode='pend'; render(); });
+  $('#segRend').addEventListener('click',function(){ viewMode='rend'; render(); });
   function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
   function fmtShort(iso){ if(!iso) return ''; var p=iso.split('-'); if(p.length<3) return iso; return p[2]+'/'+p[1]+'/'+p[0].slice(2); }
   function fmtLong(iso){ if(!iso) return ''; var p=iso.split('-'); if(p.length<3) return iso; var m=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']; return parseInt(p[2],10)+' '+m[parseInt(p[1],10)-1]+' '+p[0]; }
@@ -630,6 +672,7 @@
     clearSuggested(); $('#ocrNote').hidden=true; setReading(false);
     $('#editorTitle').textContent=isNew?'Nuevo documento':'Editar documento';
     $('#btnDeleteReceipt').hidden=isNew;
+    $('#btnUnarchive').hidden=true;
     if(isNew){
       $('#editPhoto').src=pendingPhoto?pendingPhoto.dataUrl:'';
       $('#fDesc').value=''; $('#fAmt').value=''; $('#fDate').value=todayISO(); $('#fCat').value='General';
@@ -640,6 +683,8 @@
       $('#editPhoto').src=r.full;
       $('#fDesc').value=r.desc||''; $('#fAmt').value=r.amount?formatThousands(r.amount):''; $('#fDate').value=r.date||todayISO(); $('#fCat').value=r.cat||'General';
       fillEmpresaSelect(r.empresaId||''); $('#fTipo').value=r.tipo||'Boleta';
+      $('#btnUnarchive').hidden=!r.rendido;
+      $('#editorTitle').textContent=r.rendido?'Documento rendido':'Editar documento';
     }
     $('#btnRescan').style.display = ($('#editPhoto').getAttribute('src'))? '' : 'none';
     openSheet('editorSheet');
@@ -693,6 +738,14 @@
     (useLS?Promise.resolve(LS.del(editingId)):idbDel('receipts',editingId))
       .then(function(){ editingId=null; closeSheet(); return loadReceipts().then(render); })
       .then(function(){ toast('Boleta eliminada'); });
+  });
+  $('#btnUnarchive').addEventListener('click',function(){
+    if(!editingId) return;
+    var r=receipts.find(function(x){return x.id===editingId;});
+    if(!r) return;
+    r.rendido=false; r.rendidoAt='';
+    persist(r); editingId=null; closeSheet();
+    loadReceipts().then(render).then(function(){ toast('Devuelta a pendientes'); });
   });
 
   /* ---------- Settings ---------- */
@@ -1049,8 +1102,8 @@
   /* ---------- Generate ---------- */
   function openGenerate(){
     if(!receipts.length){ toast('No hay documentos'); return; }
-    var groups=(settings.empresas||[]).map(function(e){ return {emp:e,items:receiptsByEmpresa(e.id)}; }).filter(function(g){return g.items.length;});
-    var unassigned=receipts.filter(function(r){ return !r.empresaId||!empresaById(r.empresaId); });
+    var groups=(settings.empresas||[]).map(function(e){ return {emp:e,items:receiptsByEmpresa(e.id).filter(function(r){return !r.rendido;})}; }).filter(function(g){return g.items.length;});
+    var unassigned=receipts.filter(function(r){ return (!r.empresaId||!empresaById(r.empresaId))&&!r.rendido; });
     var wrap=$('#genList'); wrap.innerHTML='';
     var docIco='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
     if(!groups.length){
@@ -1075,8 +1128,8 @@
 
   function generateFor(empId){
     var emp=empresaById(empId);
-    var list=receiptsByEmpresa(empId);
-    if(!list.length){ toast('Esta empresa no tiene documentos'); return; }
+    var list=receiptsByEmpresa(empId).filter(function(r){return !r.rendido;});
+    if(!list.length){ toast('Esta empresa no tiene documentos pendientes'); return; }
     var missing=list.some(function(r){return !r.desc;});
     if(missing && !confirm('Hay documentos sin descripción. ¿Generar de todas formas?')) return;
     closeSheet();
@@ -1086,7 +1139,7 @@
         var out=buildPDF(emp,list);
         var em=emailContent(emp,list,out.total,out.periodo);
         var to=emp?emp.email:'', cc=emp?emp.cc:'';
-        lastPdf={blob:out.blob,filename:out.filename,subject:em.subject,body:em.body,total:out.total,to:to,cc:cc};
+        lastPdf={blob:out.blob,filename:out.filename,subject:em.subject,body:em.body,total:out.total,to:to,cc:cc,ids:list.map(function(r){return r.id;}),empName:emp?emp.nombre:''};
         $('#resTotal').textContent=money(out.total);
         $('#resSub').textContent=(emp?emp.nombre+'  ·  ':'')+list.length+' doc'+(list.length!==1?'s':'');
         var canShare = !!(navigator.canShare && navigator.canShare({files:[new File([out.blob],out.filename,{type:'application/pdf'})]}));
@@ -1118,6 +1171,16 @@
     setTimeout(function(){ window.location.href=url; },500);
   });
   $('#optDownload').addEventListener('click',function(){ fallbackDownload(); toast('PDF descargado'); });
+  $('#optArchive').addEventListener('click',function(){
+    if(!lastPdf||!lastPdf.ids||!lastPdf.ids.length){ toast('Nada que archivar'); return; }
+    if(!confirm('¿Marcar como rendidas las '+lastPdf.ids.length+' de '+(lastPdf.empName||'esta empresa')+'? Se moverán a “Rendidas” y saldrán de pendientes.')) return;
+    var when=todayISO();
+    var toArch=receipts.filter(function(r){ return lastPdf.ids.indexOf(r.id)>=0; });
+    toArch.forEach(function(r){ r.rendido=true; r.rendidoAt=when; });
+    Promise.all(toArch.map(function(r){return persist(r);})).then(loadReceipts).then(function(){
+      render(); closeSheet(); toast(toArch.length+' marcada(s) como rendidas');
+    }).catch(function(){ toast('No pude archivar'); });
+  });
 
   function fallbackDownload(silent){
     if(!lastPdf) return;
