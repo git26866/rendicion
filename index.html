@@ -580,9 +580,9 @@
       var head=document.createElement('div'); head.className='group-head';
       head.innerHTML='<div class="gh-l"><div class="gh-name">'+esc(g.emp?g.emp.nombre:'Sin asignar')+'</div>'+
         '<div class="gh-sub">'+g.items.length+' doc'+(g.items.length!==1?'s':'')+'  ·  '+money(sub)+'</div></div>'+
-        ((g.emp&&viewMode==='pend')?'<button type="button" class="gh-gen">'+genIco+'Generar</button>':'');
+        (g.emp?'<button type="button" class="gh-gen">'+genIco+(viewMode==='rend'?'Informe':'Generar')+'</button>':'');
       list.appendChild(head);
-      if(g.emp&&viewMode==='pend'){ head.querySelector('.gh-gen').addEventListener('click',function(ev){ ev.stopPropagation(); generateFor(g.emp.id); }); }
+      if(g.emp){ head.querySelector('.gh-gen').addEventListener('click',function(ev){ ev.stopPropagation(); (viewMode==='rend'?regenerateFor:generateFor)(g.emp.id); }); }
       g.items.forEach(function(r){
         var el=document.createElement('div'); el.className='receipt'+(r.rendido?' done':'');
         var badge = r.rendido? '<span class="r-done">Rendida'+(r.rendidoAt?' '+fmtShort(r.rendidoAt):'')+'</span>' : '<span class="r-type">'+esc(r.tipo||'Boleta')+'</span>';
@@ -1131,6 +1131,15 @@
     var emp=empresaById(empId);
     var list=receiptsByEmpresa(empId).filter(function(r){return !r.rendido;});
     if(!list.length){ toast('Esta empresa no tiene documentos pendientes'); return; }
+    generateReport(emp,list);
+  }
+  function regenerateFor(empId){
+    var emp=empresaById(empId);
+    var list=receiptsByEmpresa(empId).filter(function(r){return r.rendido;});
+    if(!list.length){ toast('Esta empresa no tiene documentos rendidos'); return; }
+    generateReport(emp,list);
+  }
+  function generateReport(emp,list){
     var missing=list.some(function(r){return !r.desc;});
     if(missing && !confirm('Hay documentos sin descripción. ¿Generar de todas formas?')) return;
     closeSheet();
@@ -1141,10 +1150,13 @@
         var em=emailContent(emp,list,out.total,out.periodo);
         var to=emp?emp.email:'', cc=emp?emp.cc:'';
         lastPdf={blob:out.blob,filename:out.filename,subject:em.subject,body:em.body,total:out.total,to:to,cc:cc,ids:list.map(function(r){return r.id;}),empName:emp?emp.nombre:''};
+        var archivable=list.some(function(r){return !r.rendido;});
+        $('#resTitle').textContent = archivable? 'Rendición lista' : 'Informe (ya rendido)';
         $('#resTotal').textContent=money(out.total);
         $('#resSub').textContent=(emp?emp.nombre+'  ·  ':'')+list.length+' doc'+(list.length!==1?'s':'');
         var canShare = !!(navigator.canShare && navigator.canShare({files:[new File([out.blob],out.filename,{type:'application/pdf'})]}));
         $('#optShare').style.display = canShare? '' : 'none';
+        $('#optArchive').style.display = archivable? '' : 'none';
         $('#resHint').innerHTML = to? '' : 'Esta empresa no tiene <b>correo destinatario</b>. Agrégalo en Ajustes ⚙ para que el borrador salga completo.';
         $('#resHint').style.display = to? 'none':'';
         openSheet('resultSheet');
