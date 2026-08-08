@@ -376,6 +376,8 @@
   <div class="sheet-body">
     <div class="field"><label for="eNombre">Nombre de la empresa</label><input id="eNombre" type="text" placeholder="Ej: Südlich Capital S.A."></div>
     <div class="field"><label for="eRut">RUT (opcional)</label><input id="eRut" type="text" inputmode="text" placeholder="76.123.456-7"></div>
+    <div class="field"><label for="eGiro">Giro (opcional)</label><input id="eGiro" type="text" placeholder="Ej: Administradora de fondos"></div>
+    <div class="field"><label for="eDireccion">Dirección (opcional)</label><input id="eDireccion" type="text" placeholder="Ej: San Francisco 1070, of. 33, Puerto Varas"></div>
     <div class="field"><label for="eContacto">Nombre del contacto</label><input id="eContacto" type="text" placeholder="Ej: María Pérez (Finanzas)" autocomplete="name"></div>
     <div class="field"><label for="eEmail">Correo destinatario</label><input id="eEmail" type="email" inputmode="email" placeholder="finanzas@empresa.cl" autocapitalize="none"></div>
     <div class="field"><label for="eCc">Correo en copia (opcional)</label><input id="eCc" type="email" inputmode="email" placeholder="jefatura@empresa.cl" autocapitalize="none"></div>
@@ -705,7 +707,7 @@
     if(!arr.length){ wrap.innerHTML='<div class="emp-empty">Aún no agregas empresas. Toca “+ Agregar” para crear la primera.</div>'; return; }
     arr.forEach(function(e){
       var n=receiptsByEmpresa(e.id).length;
-      var meta=[]; if(e.contacto) meta.push(e.contacto); meta.push(e.email?e.email:'sin correo'); if(n) meta.push(n+' doc'+(n!==1?'s':''));
+      var meta=[]; if(e.rut) meta.push('RUT '+e.rut); if(e.contacto) meta.push(e.contacto); meta.push(e.email?e.email:'sin correo'); if(n) meta.push(n+' doc'+(n!==1?'s':''));
       var row=document.createElement('div'); row.className='emp-row';
       row.innerHTML='<div class="en"><b>'+esc(e.nombre)+'</b><span>'+esc(meta.join('  ·  '))+'</span></div><button type="button" class="ed">Editar</button>';
       row.querySelector('.ed').addEventListener('click',function(){ openEmpresaEditor(e.id); });
@@ -765,6 +767,7 @@
     var e=id?empresaById(id):null;
     $('#empTitle').textContent=id?'Editar empresa':'Nueva empresa';
     $('#eNombre').value=e?e.nombre||'':''; $('#eRut').value=e?e.rut||'':''; $('#eContacto').value=e?e.contacto||'':'';
+    $('#eGiro').value=e?e.giro||'':''; $('#eDireccion').value=e?e.direccion||'':'';
     $('#eEmail').value=e?e.email||'':''; $('#eCc').value=e?e.cc||'':''; $('#eGlosa').value=e?e.glosa||'':'';
     $('#btnDeleteEmpresa').hidden=!id;
     closeSheet(); openSheet('empresaSheet');
@@ -774,7 +777,7 @@
   $('#btnSaveEmpresa').addEventListener('click',function(){
     var nombre=$('#eNombre').value.trim();
     if(!nombre){ toast('Ponle un nombre a la empresa'); $('#eNombre').focus(); return; }
-    var data={nombre:nombre,rut:$('#eRut').value.trim(),contacto:$('#eContacto').value.trim(),email:$('#eEmail').value.trim(),cc:$('#eCc').value.trim(),glosa:$('#eGlosa').value.trim()};
+    var data={nombre:nombre,rut:$('#eRut').value.trim(),giro:$('#eGiro').value.trim(),direccion:$('#eDireccion').value.trim(),contacto:$('#eContacto').value.trim(),email:$('#eEmail').value.trim(),cc:$('#eCc').value.trim(),glosa:$('#eGlosa').value.trim()};
     if(editingEmpId){ Object.assign(empresaById(editingEmpId),data); }
     else { data.id=eid(); settings.empresas.push(data); settings.lastEmpresaId=data.id; }
     saveSettings().then(function(){ render(); backToSettings(); toast('Empresa guardada'); });
@@ -925,6 +928,8 @@
     doc.setTextColor(40,40,40); doc.setFontSize(10);
     var metaL=[];
     if(emp&&emp.nombre) metaL.push(['Empresa',emp.nombre+(emp.rut?'   ·   RUT '+emp.rut:'')]);
+    if(emp&&emp.giro) metaL.push(['Giro',emp.giro]);
+    if(emp&&emp.direccion) metaL.push(['Dirección',emp.direccion]);
     if(emp&&emp.contacto) metaL.push(['Contacto',emp.contacto+(emp.email?'   ·   '+emp.email:'')]);
     else if(emp&&emp.email) metaL.push(['Enviado a',emp.email]);
     if(settings.name) metaL.push(['Solicitante',settings.name]);
