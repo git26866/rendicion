@@ -804,13 +804,27 @@
     rd.onload=function(){
       var data; try{ data=JSON.parse(rd.result); }catch(e){ toast('Archivo no válido'); return; }
       if(!data||data.app!=='rendicion'||!Array.isArray(data.receipts)){ toast('No parece un respaldo de Rendición'); return; }
-      var nE=((data.settings&&data.settings.empresas)||[]).length;
-      if(!confirm('¿Restaurar este respaldo? Se agregarán '+data.receipts.length+' documento(s) y '+nE+' empresa(s).')) return;
-      if(data.settings){ settings=Object.assign(settings,data.settings); if(!Array.isArray(settings.empresas)) settings.empresas=[]; }
+      var incEmp=((data.settings&&data.settings.empresas)||[]);
+      var merge = data.mode==='merge';
+      if(!Array.isArray(settings.empresas)) settings.empresas=[];
+      if(merge){
+        if(!confirm('¿Agregar '+incEmp.length+' empresa(s)'+(data.receipts.length?' y '+data.receipts.length+' documento(s)':'')+'? No se borra nada de lo que ya tienes.')) return;
+        incEmp.forEach(function(e){
+          if(!e||!e.nombre) return;
+          var id=e.id||('emp'+Date.now().toString(36)+Math.round(performance.now()).toString(36));
+          var idx=settings.empresas.findIndex(function(x){ return x.id===id || (x.nombre&&x.nombre.toLowerCase()===e.nombre.toLowerCase()); });
+          var rec=Object.assign({},e,{id:(idx>=0?settings.empresas[idx].id:id)});
+          if(idx>=0) settings.empresas[idx]=Object.assign({},settings.empresas[idx],rec);
+          else settings.empresas.push(rec);
+        });
+      } else {
+        if(!confirm('¿Restaurar este respaldo? REEMPLAZA tus empresas y datos actuales por los del archivo ('+incEmp.length+' empresa(s), '+data.receipts.length+' documento(s)).')) return;
+        if(data.settings){ settings=Object.assign(settings,data.settings); if(!Array.isArray(settings.empresas)) settings.empresas=[]; }
+      }
       Promise.all(data.receipts.map(function(r){ return persist(r); }))
         .then(saveSettings).then(loadReceipts)
-        .then(function(){ render(); closeSheet(); toast('Respaldo restaurado ✓'); })
-        .catch(function(){ toast('No pude restaurar el respaldo'); });
+        .then(function(){ render(); closeSheet(); toast(merge?'Empresa(s) agregada(s) ✓':'Respaldo restaurado ✓'); })
+        .catch(function(){ toast('No pude importar el archivo'); });
     };
     rd.onerror=function(){ toast('No pude leer el archivo'); };
     rd.readAsText(file);
