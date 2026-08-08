@@ -279,7 +279,7 @@
   </button>
   <button id="btnGenerate" class="btn btn-accent">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 15l2 2 4-4"/></svg>
-    Generar informe
+    <span id="genBtnLabel">Generar informe</span>
   </button>
 </nav>
 
@@ -415,7 +415,7 @@
     <span style="width:52px"></span>
   </div>
   <div class="sheet-body">
-    <div class="hint" style="margin-bottom:12px;">Elige la empresa para generar su informe (solo sus boletas y facturas).</div>
+    <div class="hint" id="genHint" style="margin-bottom:12px;">Elige la empresa para generar su informe (solo sus boletas y facturas pendientes).</div>
     <div id="genList"></div>
   </div>
 </div>
@@ -544,7 +544,8 @@
     $('#sumCount').textContent=active.length;
     $('#sumLabel').textContent = viewMode==='rend'? 'Total rendido' : 'Total por rendir';
     $('#secTitle').textContent = viewMode==='rend'? 'Rendidas · por empresa' : 'Por empresa';
-    $('#btnGenerate').disabled = pend.length===0;
+    $('#genBtnLabel').textContent = viewMode==='rend'? 'Recuperar informe' : 'Generar informe';
+    $('#btnGenerate').disabled = viewMode==='rend'? rend.length===0 : pend.length===0;
     if(active.length){
       var ds=active.map(function(r){return r.date;}).filter(Boolean).sort();
       $('#sumPeriod').textContent = ds.length? fmtShort(ds[0])+(ds[ds.length-1]!==ds[0]?' – '+fmtShort(ds[ds.length-1]):'') : '';
@@ -580,7 +581,7 @@
       var head=document.createElement('div'); head.className='group-head';
       head.innerHTML='<div class="gh-l"><div class="gh-name">'+esc(g.emp?g.emp.nombre:'Sin asignar')+'</div>'+
         '<div class="gh-sub">'+g.items.length+' doc'+(g.items.length!==1?'s':'')+'  ·  '+money(sub)+'</div></div>'+
-        (g.emp?'<button type="button" class="gh-gen">'+genIco+(viewMode==='rend'?'Informe':'Generar')+'</button>':'');
+        (g.emp?'<button type="button" class="gh-gen">'+genIco+(viewMode==='rend'?'Recuperar':'Generar')+'</button>':'');
       list.appendChild(head);
       if(g.emp){ head.querySelector('.gh-gen').addEventListener('click',function(ev){ ev.stopPropagation(); (viewMode==='rend'?regenerateFor:generateFor)(g.emp.id); }); }
       g.items.forEach(function(r){
@@ -1101,31 +1102,34 @@
   }
 
   /* ---------- Generate ---------- */
-  function openGenerate(){
-    if(!receipts.length){ toast('No hay documentos'); return; }
-    var groups=(settings.empresas||[]).map(function(e){ return {emp:e,items:receiptsByEmpresa(e.id).filter(function(r){return !r.rendido;})}; }).filter(function(g){return g.items.length;});
-    var unassigned=receipts.filter(function(r){ return (!r.empresaId||!empresaById(r.empresaId))&&!r.rendido; });
+  function openReportPicker(rend){
+    var groups=(settings.empresas||[]).map(function(e){ return {emp:e,items:receiptsByEmpresa(e.id).filter(function(r){return rend?r.rendido:!r.rendido;})}; }).filter(function(g){return g.items.length;});
+    var unassigned=receipts.filter(function(r){ return (!r.empresaId||!empresaById(r.empresaId))&&(rend?r.rendido:!r.rendido); });
+    $('#genTitle').textContent = rend? 'Recuperar informe' : 'Generar informe';
+    $('#genHint').textContent = rend? 'Elige la empresa para volver a generar su informe (documentos ya rendidos).' : 'Elige la empresa para generar su informe (solo sus boletas y facturas pendientes).';
     var wrap=$('#genList'); wrap.innerHTML='';
     var docIco='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>';
     if(!groups.length){
-      wrap.innerHTML='<div class="emp-empty">Asigna tus boletas o facturas a una empresa (tócalas en la lista) para poder generar un informe. Puedes crear empresas en Ajustes ⚙.</div>';
+      wrap.innerHTML='<div class="emp-empty">'+(rend?'Aún no tienes documentos rendidos para recuperar.':'Asigna tus boletas o facturas a una empresa (tócalas en la lista) para poder generar un informe. Puedes crear empresas en Ajustes ⚙.')+'</div>';
     } else {
       groups.forEach(function(g){
         var sub=g.items.reduce(function(s,r){return s+(r.amount||0);},0);
         var b=document.createElement('button'); b.type='button'; b.className='opt';
         b.innerHTML='<span class="opt-ic">'+docIco+'</span><span class="opt-tx"><b>'+esc(g.emp.nombre)+'</b><span>'+g.items.length+' doc'+(g.items.length!==1?'s':'')+'  ·  '+money(sub)+(g.emp.email?'  ·  '+esc(g.emp.email):'')+'</span></span>';
-        b.addEventListener('click',function(){ generateFor(g.emp.id); });
+        b.addEventListener('click',function(){ (rend?regenerateFor:generateFor)(g.emp.id); });
         wrap.appendChild(b);
       });
     }
-    if(unassigned.length){
+    if(unassigned.length && !rend){
       var d=document.createElement('div'); d.className='emp-empty'; d.style.marginTop='10px';
       d.textContent=unassigned.length+' documento(s) “Sin asignar” no se incluyen. Ábrelos en la lista y elige su empresa.';
       wrap.appendChild(d);
     }
     openSheet('genSheet');
   }
-  $('#btnGenerate').addEventListener('click',openGenerate);
+  function openGenerate(){ if(!receipts.some(function(r){return !r.rendido;})){ toast('No hay pendientes por generar'); return; } openReportPicker(false); }
+  function openRecover(){ if(!receipts.some(function(r){return r.rendido;})){ toast('No hay rendidas para recuperar'); return; } openReportPicker(true); }
+  $('#btnGenerate').addEventListener('click',function(){ if(viewMode==='rend') openRecover(); else openGenerate(); });
 
   function generateFor(empId){
     var emp=empresaById(empId);
